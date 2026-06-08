@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Theatre Clock Control Console</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <style>
+        /* Toast Notification Container */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none; /* Prevents container from blocking clicks when invisible */
+        }
+
+        .toast {
+            pointer-events: auto; /* Allows users to click the toast if needed */
+            background-color: #2c2c2e;
+            color: #ffffff;
+            padding: 16px 24px;
+            border-radius: 14px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+            font-size: 15px;
+            min-width: 250px;
+            max-width: 350px;
+            
+            /* Animation entry setup */
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Slide into view when active */
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        /* Status Accents (Left Border Accent) */
+        .toast-success {
+            border-left: 6px solid #30d158; /* Apple Green */
+        }
+
+        .toast-error {
+            border-left: 6px solid #ff453a; /* Apple Red */
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1c1c1e; 
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: #2c2c2e; 
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 100%;
+            max-width: 450px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .card-warning {
+            border: 1px solid #d97706;
+        }
+
+        h2, h3 {
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #f2f2f7;
+        }
+
+        /* Form Layouts */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .calibration-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #3a3a3c;
+            border-radius: 14px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+        }
+
+        label {
+            font-size: 14px;
+            color: #aeaeae;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calibration-label {
+            font-size: 14px;
+            color: #ffffff;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding-left: 4px;
+        }
+
+        input[type="time"], input[type="text"] {
+            font-size: 20px;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            background: #3a3a3c;
+            color: #ffffff;
+            outline: none;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        input[type="text"] {
+            font-size: 16px;
+        }
+
+        /* Action Buttons */
+        .btn {
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary { background-color: #0a84ff; }
+        .btn-primary:hover { background-color: #0056b3; }
+        
+        .btn-success { background-color: #30d158; }
+        .btn-success:hover { background-color: #248a3d; }
+
+        .btn-danger { background-color: #ff453a; padding: 8px 12px; font-size: 14px;}
+        .btn-danger:hover { background-color: #b3241c; }
+
+        .btn-edit { background-color: #ffd60a; color: #000000; padding: 8px 12px; font-size: 14px;}
+        .btn-edit:hover { background-color: #ccaa00; }
+
+        .btn-secondary { background-color: #48484a; color: #ffffff; padding: 10px 14px; font-size: 14px; width: auto;}
+        .btn-secondary:hover { background-color: #545456; }
+
+        .btn-warning { background-color: #d97706; }
+        .btn-warning:hover { background-color: #b45309; }
+
+        /* Presets List Management */
+        .preset-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .preset-item {
+            background: #3a3a3c;
+            border-radius: 14px;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .preset-info {
+            text-align: left;
+            flex-grow: 1;
+            cursor: pointer; /* Makes the entire label feel clickable to trigger the cue */
+        }
+
+        .preset-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #ffffff;
+            margin-bottom: 2px;
+        }
+
+        .preset-time {
+            font-size: 14px;
+            color: #0a84ff;
+            font-family: monospace;
+        }
+
+        .preset-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .calibration-actions {
+            display: flex;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body>
+<div id="toast-container"></div>
+    <div class="card">
+        <h2>Live Clock Control</h2>
+        <form action="/set-time" method="POST">
+            <div class="form-group">
+                <input type="time" id="clock_input" name="clock_input" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Clock Face</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Saved Cue Presets</h3>
+        <ul class="preset-list" id="presetContainer">
+            
+        {% for preset in presets %}
+        <li class="preset-item" id="preset-{{ loop.index }}">
+            <div class="preset-info" onclick="triggerPreset('{{ preset.preset_time }}')">
+                <div class="preset-name">{{ preset.preset_name }}</div>
+                <div class="preset-time">{{ preset.preset_time }}</div>
+            </div>
+            <div class="preset-actions">
+                <button class="btn btn-edit" onclick="handleEditPreset('{{ loop.index }}')">Edit</button>
+                <button class="btn btn-danger" onclick="handleDeletePreset('{{ loop.index }}')">Delete</button>
+            </div>
+        </li>
+        {% else %}
+        <li class="preset-item" style="justify-content: center; color: #aeaeae; font-style: italic;">
+            No saved cue presets found.
+        </li>
+        {% endfor %}
+
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>Create Time Preset</h3>
+        <form id="presetForm" onsubmit="handleCreatePreset(event)">
+            <div class="form-group">
+                <label for="preset_name">Cue / Scene Name</label>
+                <input type="text" id="preset_name" placeholder="e.g., Act 1 Scene 3, Intermission" required>
+            </div>
+            <div class="form-group">
+                <label for="preset_time">Target Time</label>
+                <input type="time" id="preset_time" required>
+            </div>
+            <button type="submit" class="btn btn-success">Save Preset</button>
+        </form>
+    </div>
+
+    <div class="card card-warning">
+        <h3 style="color: #f59e0b;">⚠️ Manual Calibration</h3>
+        <div class="form-group">
+            <p style="color: #aeaeae; font-size: 14px; margin-top: 0; line-height: 1.4;">
+                Nudge hands manually if alignment slips. Adjust until both hands look straight up, then click lock.
+            </p>
+        </div>
+        
+        <div class="calibration-row">
+            <span class="calibration-label">Minute Hand</span>
+            <div class="calibration-actions">
+                <button class="btn btn-secondary" onclick="nudge('minute', 'backward')">◁ Back</button>
+                <button class="btn btn-secondary" onclick="nudge('minute', 'forward')">Fwd ▷</button>
+            </div>
+        </div>
+
+        <div class="calibration-row">
+            <span class="calibration-label">Hour Hand</span>
+            <div class="calibration-actions">
+                <button class="btn btn-secondary" onclick="nudge('hour', 'backward')">◁ Back</button>
+                <button class="btn btn-secondary" onclick="nudge('hour', 'forward')">Fwd ▷</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button onclick="setZero()" class="btn btn-warning">
+                Set Current Position as 12:00
+            </button>
+        </div>
+        
+    </div>
+    <div class="card card-danger">
+            <div style="margin-top: 20px;">
+                <button onclick="shutdown()" class="btn btn-danger btn-xl">
+                    INITIATE SHUTDOWN
+                </button>
+            </div>
+    </div>
+        
+    <script>
+        // CREATE: Triggered when "Save Preset" is pressed
+        function handleCreatePreset(event) {
+            event.preventDefault();
+            const name = document.getElementById('preset_name').value;
+            const time = document.getElementById('preset_time').value;
+
+            console.log("Create Request Sent:", { name: name, time: time });
+            
+            fetch('/create-preset', {
+                method: 'POST', 
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    preset_name: name,
+                    preset_time: time
+                })
+            }).then(response => {
+                if (!response.ok) throw new Error('Network response was not ok')
+                return response.json();
+            })
+            .then(data => {
+                showToast(`Preset "${name}" saved successfully!`, 'success');
+                document.getElementById('presetForm').reset();
+                location.reload();
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                showToast('Failed to save preset. Check connection.', 'error');
+            });
+        }
+
+        // EDIT: Triggered when the yellow "Edit" button next to a preset is clicked
+        function handleEditPreset(presetId) {
+            console.log("Edit requested for Preset ID:", presetId);
+            
+            const currentName = document.querySelector(`#preset-${presetId} .preset-name`).innerText;
+            const currentTime = document.querySelector(`#preset-${presetId} .preset-time`).innerText;
+
+            const newName = prompt("Edit Cue Name:", currentName);
+            const newTime = prompt("Edit Cue Time (HH:MM):", currentTime);
+
+            if (newName && newTime) {
+                console.log("Update Data Confirmed:", { id: presetId, name: newName, time: newTime });
+            }
+        }
+
+        // DELETE: Triggered when the red "Delete" button is clicked
+        function handleDeletePreset(presetId) {
+            const confirmed = confirm("Are you sure you want to delete this stage preset?");
+            if (!confirmed) return;
+
+            console.log("Delete Request Confirmed for ID:", presetId);
+            
+            fetch('/delete-preset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    index: presetId
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to delete resource');
+                return response.json();
+            })
+            .then(data => {
+                const elementToRemove = document.getElementById(`preset-${presetId}`);
+                if (elementToRemove) {
+                    elementToRemove.remove();
+                }
+                
+                showToast("Preset removed successfully!", "success");
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                showToast("Failed to delete preset. Check connection.", "error");
+            });
+        }
+
+        // RUN CUE: Helper function that sends the preset time straight to the main live controller input
+        function triggerPreset(timeString) {
+            const liveInput = document.getElementById('clock_input');
+            liveInput.value = timeString;
+            console.log(`Preset time ${timeString} sent to main active target input.`);
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => {
+                    toast.remove();
+                });
+            }, 4000);
+        }
+
+        // Globally accessible calibration logic hooks
+        function nudge(motor, direction) {
+            fetch('/api/nudge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motor: motor, direction: direction })
+            })
+            .then(response => response.json())
+            .then(data => console.log("Nudge status:", data.status))
+            .catch(err => console.error("Error nudging motor:", err));
+        }
+
+        function setZero() {
+            if (confirm("Confirm that BOTH hands are pointing exactly straight up at 12:00?")) {
+                fetch('/api/set_zero', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showToast("Calibration complete! System tracking is reset to 12:00.", "success");
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                });
+            }
+        }
+
+        function shutdown() {
+            if (confirm("Confirm SHUTDOWN")) {
+                fetch('api/shutdown', { method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    showToast("Shutdown complete", "success")
+                })
+            }
+        }
+    </script>
+</body>
+</html>
