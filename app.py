@@ -130,7 +130,7 @@ def delete_preset():
     return {"status": "error", "message": "No presets found to delete"}, 404
 
 # NUDGE STEP INCREMENT: Adjust this integer to change how far the hands move per click
-NUDGE_STEPS = 100 
+NUDGE_STEPS = 50 
 
 @app.route('/api/nudge', methods=['POST'])
 def api_nudge():
