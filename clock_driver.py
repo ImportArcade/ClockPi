@@ -265,8 +265,6 @@ def reset_tracking_to_zero():
 if __name__ == '__main__':
     setup()
     try:
-        # Example Test: Jump to 3:00 and let it tick naturally from there
-        move_to_time(3, 0)
         
         # Keep main main terminal execution alive so background thread can tick
         while True:

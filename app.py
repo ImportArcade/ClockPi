@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for
-import clocktest
+import clock_driver
 import startup_shutdown as startshut
 import json
 import os
@@ -66,7 +66,7 @@ def set_time():
     target_hour = int(split_time_array[0])
     target_minute = int(split_time_array[1])
 
-    clocktest.move_to_time(target_hour, target_minute)
+    clock_driver.move_to_time(target_hour, target_minute)
 
     return redirect(url_for('index'))
 
@@ -139,14 +139,14 @@ def api_nudge():
     direction = data.get('direction')
     
     # 1. Stop background time tracking loop so it doesn't interrupt manual adjustment
-    clocktest.stop_live_clock()
+    clock_driver.stop_live_clock()
     
     # 2. Determine target motor lines
     if motor == 'minute':
-        pins = clocktest.MINUTE_PINS
+        pins = clock_driver.MINUTE_PINS
         is_hour = False
     else:
-        pins = clocktest.HOUR_PINS
+        pins = clock_driver.HOUR_PINS
         is_hour = True
 
     # 3. Handle step count direction parameters
@@ -157,14 +157,14 @@ def api_nudge():
         steps = -NUDGE_STEPS
 
     print(f"[Manual Control] Nudging {motor} motor {direction} by {abs(steps)} steps.")
-    clocktest.step_motor(pins, steps, is_hour_motor=is_hour)
+    clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
     
     return {"status": "success", "motor": motor, "direction": direction}
 
 @app.route('/api/set_zero', methods=['POST'])
 def api_set_zero():
     # Force reset tracking points to perfect zero coordinates
-    clocktest.reset_tracking_to_zero()
+    clock_driver.reset_tracking_to_zero()
     return {"status": "aligned"}
 
 @app.route('/api/shutdown', methods=['POST'])
@@ -226,6 +226,6 @@ def wifi_setup():
         return "<h1>Connecting...</h1><p>The clock is connecting to the network. This hotspot will close shortly.</p>"
 
 if __name__ == '__main__':
-    clocktest.setup()
+    clock_driver.setup()
     
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=False)

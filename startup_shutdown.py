@@ -1,4 +1,4 @@
-import clocktest
+import clock_driver
 import json
 import os
 import subprocess
@@ -9,7 +9,7 @@ def smooth_shutdown():
     # 1. Safely park your physical clock hardware at the 12:00 home position first
     try:
         # Assuming True forces a fast-forward/calibration swipe
-        clocktest.move_to_time(12, 0, True) 
+        clock_driver.move_to_time(12, 0, True) 
         print("Clock face successfully parked at 12:00.")
     except Exception as e:
         print(f"Hardware parking failed, proceeding to hardware safety line: {e}")
