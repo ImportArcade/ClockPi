@@ -1,9 +1,0 @@
-[Startup Sync] System successfully synced to positions for 03:30
-               Min Steps: 1024, Hour Steps: 597
- * Serving Flask app 'app'
- * Debug mode: on
-[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
- * Running on all addresses (0.0.0.0)
- * Running on http://127.0.0.1:5000
- * Running on http://127.0.0.1:5000
-[33mPress CTRL+C to quit[0m
