@@ -261,7 +261,7 @@ def system_update():
         
         # Run git pull and capture the output to see if it succeeds
         result = subprocess.run(
-            ["git", "pull", "origin", "main"],
+            ["git", "pull"],
             cwd=project_dir,
             capture_output=True,
             text=True,
