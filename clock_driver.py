@@ -122,11 +122,24 @@ def move_to_time(target_hr, target_min, is_shutdown = False):
 def tick_one_minute():
     global current_minute_step, current_hour_step
 
-    one_minute_step = (STEPS_PER_REV / 60)
-    hour_step = (STEPS_PER_REV / 720) # 2048 steps / 12 hours / 60 minutes
+    STEPS_PER_MIN = 2048 / 60  (~34.1333)
+    STEPS_PER_HR  = 2048 / 12  (~170.6666)
+    
+    # To find what the hour hand needs per MINUTE, we divide the full hour steps by 60
+    target_hour_step_per_minute = STEPS_PER_HR / 60  # (~2.8444)
 
+    # 2. Calculate the EXACT cumulative floating targets from the previous absolute positions
+    next_minute_target = current_minute_step + STEPS_PER_MIN
+    next_hour_target   = current_hour_step + target_hour_step_per_minute
+
+    # 3. Determine actual whole-integer steps to feed the physical motor pins right now
+    # Subtraction between rounded targets ensures dropped decimal fractions are carried over to the next minute!
+    one_minute_step = round(next_minute_target) - round(current_minute_step)
+    hour_step       = round(next_hour_target) - round(current_hour_step)
+
+    # 4. Dispatch the step actions to the motor threads
     minute_thread = threading.Thread(target=step_motor, args=(MINUTE_PINS, one_minute_step, False))
-    hour_thread = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
+    hour_thread   = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
     
     minute_thread.start()
     hour_thread.start()
@@ -134,11 +147,13 @@ def tick_one_minute():
     minute_thread.join()
     hour_thread.join()
 
-    TOTAL_MIN_REV_STEPS = int(60 * STEPS_PER_MIN)
-    TOTAL_HR_REV_STEPS  = int(12 * STEPS_PER_HR)
+    # 5. Maintain the total revolution ring boundaries using your tracking constants
+    TOTAL_MIN_REV_STEPS = 60 * STEPS_PER_MIN  # Exactly 2048.0
+    TOTAL_HR_REV_STEPS  = 12 * STEPS_PER_HR   # Exactly 2048.0
 
-    current_minute_step = (current_minute_step + int(one_minute_step)) % TOTAL_MIN_REV_STEPS
-    current_hour_step = (current_hour_step + int(hour_step)) % TOTAL_HR_REV_STEPS
+    # Save the un-rounded float states back to globals so fractions compound over time
+    current_minute_step = (next_minute_target) % TOTAL_MIN_REV_STEPS
+    current_hour_step   = (next_hour_target) % TOTAL_HR_REV_STEPS
 
     display_tracked_time()
     
