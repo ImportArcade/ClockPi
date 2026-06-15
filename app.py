@@ -136,7 +136,7 @@ NUDGE_STEPS_PRECISE = 10
 @app.route('/api/nudge', methods=['POST'])
 def api_nudge():
     data = request.get_json()
-    motor = data.get('motor')
+    motor = data.get('hand')
     direction = data.get('direction')
     
     # 1. Stop background time tracking loop so it doesn't interrupt manual adjustment
@@ -165,7 +165,7 @@ def api_nudge():
 @app.route('/api/nudge_precise', methods=['POST'])
 def api_nudge_precise():
     data = request.get_json()
-    motor = data.get('motor')
+    motor = data.get('hand')
     direction = data.get('direction')
     steps = int(data.get('steps', NUDGE_STEPS_PRECISE))  # Default to precise step count if not provided
 
