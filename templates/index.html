@@ -226,6 +226,23 @@
             display: flex;
             gap: 6px;
         }
+        .switch input:checked + .slider {
+        background-color: #4a7c59; /* Custom moss green accent */
+    }
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+    .switch input:checked + .slider:before {
+        transform: translateX(20px);
+    }
     </style>
 </head>
 <body>
@@ -280,28 +297,38 @@
     </div>
 
     <div class="card card-warning">
-        <h3 style="color: #f59e0b;">⚠️ Manual Calibration</h3>
-        <div class="form-group">
-            <p style="color: #aeaeae; font-size: 14px; margin-top: 0; line-height: 1.4;">
-                Nudge hands manually if alignment slips. Adjust until both hands look straight up, then click lock.
-            </p>
-        </div>
-        
-        <div class="calibration-row">
-            <span class="calibration-label">Minute Hand</span>
-            <div class="calibration-actions">
-                <button class="btn btn-secondary" onclick="nudge('minute', 'backward')">◁ Back</button>
-                <button class="btn btn-secondary" onclick="nudge('minute', 'forward')">Fwd ▷</button>
-            </div>
-        </div>
+    <h3 style="color: #f59e0b; margin-bottom: 15px;">⚠️ Manual Calibration</h3>
+    
+    <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: #2a2a2a; padding: 10px; border-radius: 6px;">
+        <span style="color: #fff; font-size: 14px; font-weight: bold;">Precise Tuning Mode</span>
+        <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+            <input type="checkbox" id="nudgeModeToggle" style="opacity: 0; width: 0; height: 0;">
+            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .3s; border-radius: 24px;"></span>
+        </label>
+    </div>
 
-        <div class="calibration-row">
-            <span class="calibration-label">Hour Hand</span>
-            <div class="calibration-actions">
-                <button class="btn btn-secondary" onclick="nudge('hour', 'backward')">◁ Back</button>
-                <button class="btn btn-secondary" onclick="nudge('hour', 'forward')">Fwd ▷</button>
-            </div>
+    <div class="form-group">
+        <p style="color: #aeaeae; font-size: 14px; margin-top: 0; line-height: 1.4;">
+            Nudge hands manually if alignment slips. Adjust until both hands look straight up, then click lock.
+        </p>
+    </div>
+    
+    <div class="calibration-row">
+        <span class="calibration-label">Minute Hand</span>
+        <div class="calibration-actions">
+            <button class="btn btn-secondary" onclick="nudge('minute', 'backward')">◁ Back</button>
+            <button class="btn btn-secondary" onclick="nudge('minute', 'forward')">Fwd ▷</button>
         </div>
+    </div>
+
+    <div class="calibration-row">
+        <span class="calibration-label">Hour Hand</span>
+        <div class="calibration-actions">
+            <button class="btn btn-secondary" onclick="nudge('hour', 'backward')">◁ Back</button>
+            <button class="btn btn-secondary" onclick="nudge('hour', 'forward')">Fwd ▷</button>
+        </div>
+    </div>
+</div>
 
         <div style="margin-top: 20px;">
             <button onclick="setZero()" class="btn btn-warning">
@@ -316,6 +343,12 @@
                     INITIATE SHUTDOWN
                 </button>
             </div>
+    </div>
+    <div class="system-controls">
+    <button id="updateBtn" onclick="triggerUpdate()" style="background-color: #d9534f; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+        Update & Reboot Clock
+    </button>
+        <p id="updateStatus" style="margin-top: 10px; font-weight: bold;"></p>
     </div>
         
     <script>
@@ -429,15 +462,37 @@
         }
 
         // Globally accessible calibration logic hooks
-        function nudge(motor, direction) {
-            fetch('/api/nudge', {
+       function nudge(hand, direction) {
+            // Check if the precise mode checkbox is toggled on
+            const isPrecise = document.getElementById('nudgeModeToggle').checked;
+            
+            //Selection of endpoint based on state
+            const endpoint = isPrecise ? '/api/nudge_precise' : '/api/nudge';
+
+            console.log(`Sending execution payload to: ${endpoint} for ${hand} (${direction})`);
+
+            fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motor: motor, direction: direction })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    hand: hand,
+                    direction: direction
+                })
             })
-            .then(response => response.json())
-            .then(data => console.log("Nudge status:", data.status))
-            .catch(err => console.error("Error nudging motor:", err));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                print("Nudge target alignment acknowledged successfully.");
+            })
+            .catch(error => {
+                console.error('Error executing alignment nudge payload:', error);
+            });
         }
 
         function setZero() {
@@ -462,6 +517,46 @@
                 })
             }
         }
+
+        function triggerUpdate() {
+    if (!confirm("Are you sure you want to pull the latest code and reboot the clock?")) {
+        return;
+    }
+
+    const btn = document.getElementById('updateBtn');
+    const status = document.getElementById('updateStatus');
+
+    btn.disabled = true;
+    btn.innerText = "Updating...";
+    status.style.color = "orange";
+    status.innerText = "Pulling latest code from GitHub and restarting the system...";
+
+    fetch('/system/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === "success") {
+            status.style.color = "green";
+            status.innerText = data.message;
+            // Optionally count down or tell them to refresh in 30 seconds
+        } else {
+            status.style.color = "red";
+            status.innerText = "Error: " + data.message;
+            btn.disabled = false;
+            btn.innerText = "Update & Reboot Clock";
+        }
+    })
+    .catch(err => {
+        // Because the Pi reboots immediately, the fetch connection might drop abruptly. 
+        // We treat a dropped connection here as a likely successful reboot sequence!
+        status.style.color = "green";
+        status.innerText = "Clock is rebooting now. Reconnect in 30 seconds!";
+    });
+}
     </script>
 </body>
 </html>

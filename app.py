@@ -130,7 +130,8 @@ def delete_preset():
     return {"status": "error", "message": "No presets found to delete"}, 404
 
 # NUDGE STEP INCREMENT: Adjust this integer to change how far the hands move per click
-NUDGE_STEPS = 100 
+NUDGE_STEPS = 100
+NUDGE_STEPS_PRECISE = 10 
 
 @app.route('/api/nudge', methods=['POST'])
 def api_nudge():
@@ -160,6 +161,33 @@ def api_nudge():
     clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
     
     return {"status": "success", "motor": motor, "direction": direction}
+
+@app.route('/api/nudge_precise', methods=['POST'])
+def api_nudge_precise():
+    data = request.get_json()
+    motor = data.get('motor')
+    direction = data.get('direction')
+    steps = int(data.get('steps', NUDGE_STEPS_PRECISE))  # Default to precise step count if not provided
+
+    # 1. Stop background time tracking loop so it doesn't interrupt manual adjustment
+    clock_driver.stop_live_clock()
+
+    # 2. Determine target motor lines
+    if motor == 'minute':
+        pins = clock_driver.MINUTE_PINS
+        is_hour = False
+    else:
+        pins = clock_driver.HOUR_PINS
+        is_hour = True
+
+    # 3. Handle step count direction parameters
+    if direction == 'backward':
+        steps = -steps
+
+    print(f"[Manual Control] Nudging {motor} motor {direction} by {abs(steps)} steps.")
+    clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
+
+    return {"status": "success", "motor": motor, "direction": direction, "steps": steps}
 
 @app.route('/api/set_zero', methods=['POST'])
 def api_set_zero():
@@ -224,6 +252,43 @@ def wifi_setup():
         # so the web request finishes cleanly before the hotspot drops.
         subprocess.Popen(["sudo", "python3", "/home/colbybarrett/theatre_clock/switch_network.py", ssid, password])
         return "<h1>Connecting...</h1><p>The clock is connecting to the network. This hotspot will close shortly.</p>"
+    
+@app.route('/system/update', methods=['POST'])
+def system_update():
+    try:
+        # 1. Navigate to the project folder and pull the latest code from GitHub
+        project_dir = "/home/colbybarrett/theatre_clock"
+        
+        # Run git pull and capture the output to see if it succeeds
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 2. Trigger a delayed reboot (gives Flask 2 seconds to send the response back)
+        # 'shutdown -r +1' reboots in 1 minute, but we can use an asynchronous sleep for instant execution
+        subprocess.Popen("sleep 2 && sudo reboot", shell=True)
+        
+        return {
+            "status": "success",
+            "message": "Update pulled successfully! The clock is rebooting to apply changes. Wait ~30 seconds.",
+            "git_output": result.stdout
+        }
+
+    except subprocess.CalledProcessError as e:
+        return {
+            "status": "error",
+            "message": "Git pull failed. Check repository status or credentials.",
+            "error_details": e.stderr
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 if __name__ == '__main__':
     clock_driver.setup()
