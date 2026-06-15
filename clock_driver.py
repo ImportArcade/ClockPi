@@ -283,7 +283,8 @@ if __name__ == '__main__':
         
         # Keep main main terminal execution alive so background thread can tick
         while True:
-            time.sleep(1)
+            time.sleep(5)
+            tick_one_minute()
             
     except KeyboardInterrupt:
         print("\nShutting down clock script.")
