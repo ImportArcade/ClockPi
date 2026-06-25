@@ -127,7 +127,7 @@
             padding-left: 4px;
         }
 
-        input[type="time"], input[type="text"] {
+        input[type="time"], input[type="text"], textarea {
             font-size: 20px;
             padding: 12px;
             border: none;
@@ -139,8 +139,13 @@
             width: 100%;
         }
 
-        input[type="text"] {
+        input[type="text"], textarea {
             font-size: 16px;
+        }
+
+        textarea {
+            resize: none;
+            font-family: inherit;
         }
 
         /* Action Buttons */
@@ -215,6 +220,14 @@
             font-size: 14px;
             color: #0a84ff;
             font-family: monospace;
+            margin-bottom: 2px;
+        }
+
+        .preset-notes {
+            font-size: 13px;
+            color: #aeaeae;
+            font-style: italic;
+            line-height: 1.3;
         }
 
         .preset-actions {
@@ -266,6 +279,9 @@
             <div class="preset-info" onclick="triggerPreset('{{ preset.preset_time }}')">
                 <div class="preset-name">{{ preset.preset_name }}</div>
                 <div class="preset-time">{{ preset.preset_time }}</div>
+                {% if preset.preset_notes %}
+                <div class="preset-notes">{{ preset.preset_notes }}</div>
+                {% endif %}
             </div>
             <div class="preset-actions">
                 <button class="btn btn-edit" onclick="handleEditPreset('{{ loop.index }}')">Edit</button>
@@ -291,6 +307,13 @@
             <div class="form-group">
                 <label for="preset_time">Target Time</label>
                 <input type="time" id="preset_time" required>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="preset_notes">Production Notes</label>
+                    <small id="charCount" style="color: #aeaeae; font-size: 11px;">0 / 100</small>
+                </div>
+                <textarea id="preset_notes" maxlength="100" rows="2" placeholder="Optional notes or cues..."></textarea>
             </div>
             <button type="submit" class="btn btn-success">Save Preset</button>
         </form>
@@ -352,13 +375,19 @@
     </div>
         
     <script>
+        // Live character counter logic
+        document.getElementById('preset_notes').addEventListener('input', function() {
+            document.getElementById('charCount').innerText = `${this.value.length} / 100`;
+        });
+
         // CREATE: Triggered when "Save Preset" is pressed
         function handleCreatePreset(event) {
             event.preventDefault();
             const name = document.getElementById('preset_name').value;
             const time = document.getElementById('preset_time').value;
+            const notes = document.getElementById('preset_notes').value;
 
-            console.log("Create Request Sent:", { name: name, time: time });
+            console.log("Create Request Sent:", { name: name, time: time, notes: notes });
             
             fetch('/create-preset', {
                 method: 'POST', 
@@ -367,7 +396,8 @@
                 },
                 body: JSON.stringify({
                     preset_name: name,
-                    preset_time: time
+                    preset_time: time,
+                    preset_notes: notes.substring(0, 100) // Double-check safety slicing boundary
                 })
             }).then(response => {
                 if (!response.ok) throw new Error('Network response was not ok')
@@ -376,6 +406,7 @@
             .then(data => {
                 showToast(`Preset "${name}" saved successfully!`, 'success');
                 document.getElementById('presetForm').reset();
+                document.getElementById('charCount').innerText = "0 / 100";
                 location.reload();
             })
             .catch((error) => {
@@ -390,12 +421,39 @@
             
             const currentName = document.querySelector(`#preset-${presetId} .preset-name`).innerText;
             const currentTime = document.querySelector(`#preset-${presetId} .preset-time`).innerText;
+            const notesEl = document.querySelector(`#preset-${presetId} .preset-notes`);
+            const currentNotes = notesEl ? notesEl.innerText : "";
 
             const newName = prompt("Edit Cue Name:", currentName);
             const newTime = prompt("Edit Cue Time (HH:MM):", currentTime);
+            const newNotes = prompt("Edit Production Notes (Max 100 chars):", currentNotes);
 
             if (newName && newTime) {
-                console.log("Update Data Confirmed:", { id: presetId, name: newName, time: newTime });
+                console.log("Update Data Confirmed:", { id: presetId, name: newName, time: newTime, notes: newNotes || "" });
+                
+                // Construct and call matching update handler payload
+                fetch('/create-preset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        preset_name: newName,
+                        preset_time: newTime,
+                        preset_notes: (newNotes || "").substring(0, 100),
+                        index: presetId // Explicit context flag for backend routing replacement rules
+                    })
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response failed');
+                    return res.json();
+                })
+                .then(data => {
+                    showToast("Preset edited successfully!", "success");
+                    location.reload();
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast("Failed to save edited preset.", "error");
+                });
             }
         }
 

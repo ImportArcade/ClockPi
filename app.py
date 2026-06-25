@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import clock_driver
 import startup_shutdown as startshut
 import json
@@ -75,6 +75,12 @@ def create_preset():
     new_preset = request.get_json()
     print(f"Json object received: {new_preset}")
     
+    # Extract structural components safely
+    preset_name = new_preset.get('preset_name', '').strip()
+    preset_time = new_preset.get('preset_time', '').strip()
+    preset_notes = new_preset.get('preset_notes', '').strip()[:100] # Force maximum boundary logic
+    target_idx = new_preset.get('index') # Check if an edit operation triggered this call
+    
     presets_list = []
     
     # 1. Read existing presets if the file exists and has content
@@ -82,15 +88,32 @@ def create_preset():
         try:
             with open("data.json", "r", encoding="utf-8") as file:
                 presets_list = json.load(file)
-                # Ensure it's actually a list we can append to
                 if not isinstance(presets_list, list):
                     presets_list = [presets_list]
         except json.JSONDecodeError:
-            # If the file was corrupted, reset to an empty list
             presets_list = []
 
-    # 2. Append the incoming new preset to our Python list
-    presets_list.append(new_preset)
+    # Pack clear key values into the JSON payload dictionary
+    preset_entry = {
+        "preset_name": preset_name,
+        "preset_time": preset_time,
+        "preset_notes": preset_notes
+    }
+
+    # 2. Check if this is an Edit operation (index exists) or a New creation request
+    if target_idx is not None:
+        try:
+            # Shift back to zero-index pointer mechanics matching Jinja loops
+            py_idx = int(target_idx) - 1
+            if 0 <= py_idx < len(presets_list):
+                presets_list[py_idx] = preset_entry
+            else:
+                presets_list.append(preset_entry)
+        except (ValueError, TypeError):
+            presets_list.append(preset_entry)
+    else:
+        # Append the new structure down onto the end of the data list array
+        presets_list.append(preset_entry)
 
     # 3. Overwrite the file cleanly with the updated array structure
     with open("data.json", "w", encoding="utf-8") as file:
@@ -151,10 +174,8 @@ def api_nudge():
         is_hour = True
 
     # 3. Handle step count direction parameters
-    # If stepping backward, we pass it down to your direction assignment engine
     steps = NUDGE_STEPS
     if direction == 'backward':
-        # Overriding direction behavior inside step_motor if backward parameter is caught
         steps = -NUDGE_STEPS
 
     print(f"[Manual Control] Nudging {motor} motor {direction} by {abs(steps)} steps.")
@@ -202,16 +223,13 @@ def shutdown():
 @app.route('/wifi-setup/', methods=['GET', 'POST'])
 def wifi_setup():
     if request.method == 'GET':
-        # Scan for nearby Wi-Fi networks to populate a dropdown
         scan_cmd = ["sudo", "nmcli", "-t", "-f", "SSID", "dev", "wifi", "list"]
         try:
-            # Get unique, non-empty SSIDs
             output = subprocess.check_output(scan_cmd, text=True)
             networks = list(set([line.strip() for line in output.split('\n') if line.strip()]))
         except Exception:
             networks = []
             
-        # Return a simple HTML setup template
         return '''
         <!DOCTYPE html>
         <html>
@@ -248,18 +266,13 @@ def wifi_setup():
         ssid = request.form.get('ssid')
         password = request.form.get('password')
         
-        # Trigger a detached background script to execute the switchover 
-        # so the web request finishes cleanly before the hotspot drops.
         subprocess.Popen(["sudo", "python3", "/home/colbybarrett/theatre_clock/switch_network.py", ssid, password])
         return "<h1>Connecting...</h1><p>The clock is connecting to the network. This hotspot will close shortly.</p>"
     
 @app.route('/system/update', methods=['POST'])
 def system_update():
     try:
-        # 1. Navigate to the project folder and pull the latest code from GitHub
         project_dir = "/home/colbybarrett/theatre_clock"
-        
-        # Run git pull and capture the output to see if it succeeds
         result = subprocess.run(
             ["git", "pull"],
             cwd=project_dir,
@@ -267,17 +280,12 @@ def system_update():
             text=True,
             check=True
         )
-        
-        # 2. Trigger a delayed reboot (gives Flask 2 seconds to send the response back)
-        # 'shutdown -r +1' reboots in 1 minute, but we can use an asynchronous sleep for instant execution
         subprocess.Popen("sleep 2 && sudo reboot", shell=True)
-        
         return {
             "status": "success",
             "message": "Update pulled successfully! The clock is rebooting to apply changes. Wait ~30 seconds.",
             "git_output": result.stdout
         }
-
     except subprocess.CalledProcessError as e:
         return {
             "status": "error",
@@ -292,5 +300,4 @@ def system_update():
 
 if __name__ == '__main__':
     clock_driver.setup()
-    
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=False)
