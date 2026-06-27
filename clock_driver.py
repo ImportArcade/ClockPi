@@ -123,7 +123,7 @@ def tick_one_minute():
     global current_minute_step, current_hour_step
 
     one_minute_step = (STEPS_PER_REV / 60)
-    hour_step = (STEPS_PER_REV / 720) # 2048 steps / 12 hours / 60 minutes
+    hour_step = STEPS_PER_HR / 60  # Use STEPS_PER_HR to respect gear ratio
 
     minute_thread = threading.Thread(target=step_motor, args=(MINUTE_PINS, one_minute_step, False))
     hour_thread = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
