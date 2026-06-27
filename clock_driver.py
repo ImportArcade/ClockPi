@@ -125,14 +125,17 @@ def tick_one_minute():
     one_minute_step = (STEPS_PER_REV / 60)
     hour_step = (STEPS_PER_REV / 360)  # 2048 steps / 6 hours / 60 minutes - doubled speed
 
-    minute_thread = threading.Thread(target=step_motor, args=(MINUTE_PINS, one_minute_step, False))
-    hour_thread = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
+    # minute_thread = threading.Thread(target=step_motor, args=(MINUTE_PINS, one_minute_step, False))
+    # hour_thread = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
     
-    minute_thread.start()
-    hour_thread.start()
+    # minute_thread.start()
+    # hour_thread.start()
     
-    minute_thread.join()
-    hour_thread.join()
+    # minute_thread.join()
+    # hour_thread.join()
+
+    step_motor(MINUTE_PINS, one_minute_step, False)
+    step_motor(HOUR_PINS, hour_step, True)
 
     TOTAL_MIN_REV_STEPS = int(60 * STEPS_PER_MIN)
     TOTAL_HR_REV_STEPS  = int(12 * STEPS_PER_HR)
