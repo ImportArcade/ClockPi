@@ -35,6 +35,9 @@ hour_step_index = 0
 background_thread = None
 stop_ticker = False
 
+minute_residual = 0.0
+hour_residual = 0.0
+
 def setup():
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
@@ -115,33 +118,44 @@ def move_to_time(target_hr, target_min, is_shutdown = False):
     # Save absolute hand positions
     current_minute_step = target_min_step
     current_hour_step = target_hr_step
+
+    # Clear residuals during explicit time jumps
+    global minute_residual, hour_residual
+    minute_residual = 0.0
+    hour_residual = 0.0
+    
     write_last_recorded_time()
     if not is_shutdown:
         start_live_clock()
 
 def tick_one_minute():
     global current_minute_step, current_hour_step
+    global minute_residual, hour_residual
 
-    one_minute_step = (STEPS_PER_REV / 60)
-    hour_step = (STEPS_PER_REV / 720)  # 2048 steps / 6 hours / 60 minutes - doubled speed
+    # 1. Calculate raw target step counts including any leftover fractions
+    raw_minute_steps = (STEPS_PER_REV / 60) + minute_residual  # 34.1333 + leftover
+    raw_hour_steps   = (STEPS_PER_REV / 720) + hour_residual   # 2.8444 + leftover
 
-    # minute_thread = threading.Thread(target=step_motor, args=(MINUTE_PINS, one_minute_step, False))
-    # hour_thread = threading.Thread(target=step_motor, args=(HOUR_PINS, hour_step, True))
-    
-    # minute_thread.start()
-    # hour_thread.start()
-    
-    # minute_thread.join()
-    # hour_thread.join()
+    # 2. Separate the clean whole integers that the motor can actually execute
+    one_minute_step = int(raw_minute_steps)
+    hour_step       = int(raw_hour_steps)
 
-    step_motor(MINUTE_PINS, one_minute_step, False)
-    step_motor(HOUR_PINS, hour_step, True)
+    # 3. Save the tiny decimal remainders back to the globals for the next minute
+    minute_residual = raw_minute_steps - one_minute_step
+    hour_residual   = raw_hour_steps - hour_step
 
+    # 4. Physically drive the stepper motors using your sequential motor driver
+    if one_minute_step > 0:
+        step_motor(MINUTE_PINS, one_minute_step, False)
+    if hour_step > 0:
+        step_motor(HOUR_PINS, hour_step, True)
+
+    # 5. Keep your master tracking metrics clean and constrained as pure integers
     TOTAL_MIN_REV_STEPS = int(60 * STEPS_PER_MIN)
     TOTAL_HR_REV_STEPS  = int(12 * STEPS_PER_HR)
 
-    current_minute_step = (current_minute_step + int(one_minute_step)) % TOTAL_MIN_REV_STEPS
-    current_hour_step = (current_hour_step + int(hour_step)) % TOTAL_HR_REV_STEPS
+    current_minute_step = (current_minute_step + one_minute_step) % TOTAL_MIN_REV_STEPS
+    current_hour_step   = (current_hour_step + hour_step) % TOTAL_HR_REV_STEPS
 
     display_tracked_time()
     
@@ -255,6 +269,11 @@ def reset_tracking_to_zero():
     # 2. Force variables down to literal baseline index values
     current_minute_step = 0
     current_hour_step = 0
+    
+    # Clear residuals during manual calibration reset
+    global minute_residual, hour_residual
+    minute_residual = 0.0
+    hour_residual = 0.0
     
     # 3. Explicitly overwrite the saved configuration file state
     write_last_recorded_time()
