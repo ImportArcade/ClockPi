@@ -54,21 +54,36 @@ def index():
             presets = [] 
     return render_template('index.html', presets=presets)
 
-@app.route("/set-time", methods = ["POST"])
+@app.route("/api/set_time", methods=["POST"])
 def set_time():
-    raw_time = request.form.get("clock_input")
-
+    data = request.get_json()
+    if not data:
+        return {"status": "error", "message": "Missing JSON payload"}, 400
+        
+    raw_time = data.get("time")  # Captures the browser's "HH:MM" string
     if not raw_time:
-        return redirect(url_for('index'))
+        return {"status": "error", "message": "Missing time parameter"}, 400
     
-    split_time_array = raw_time.split(":")
+    try:
+        split_time_array = raw_time.split(":")
+        browser_hour = int(split_time_array[0])
+        target_minute = int(split_time_array[1])
 
-    target_hour = int(split_time_array[0])
-    target_minute = int(split_time_array[1])
+        # --- Convert 24-hour input down to a pure 12-hour mechanical coordinate ---
+        # If hour is 0 (12:00 AM) or 12 (12:00 PM), target_hour becomes 12.
+        # If hour is 13 through 23 (1:00 PM - 11:00 PM), it maps cleanly to 1 through 11.
+        target_hour = browser_hour % 12
+        if target_hour == 0:
+            target_hour = 12
 
-    clock_driver.move_to_time(target_hour, target_minute)
+        print(f"[Analog Conversion] Browser time '{browser_hour:02d}:{target_minute:02d}' translated to physical hands -> {target_hour}:{target_minute:02d}")
+        
+        clock_driver.move_to_time(target_hour, target_minute)
 
-    return redirect(url_for('index'))
+        return {"status": "success", "message": f"Clock updating to {target_hour}:{target_minute:02d}"}, 200
+        
+    except (ValueError, IndexError) as e:
+        return {"status": "error", "message": f"Malformed time data configuration: {str(e)}"}, 400
 
 @app.route("/create-preset", methods=["POST"])
 def create_preset():
@@ -318,6 +333,38 @@ def api_toggle_live_tick():
         # Hard stop the ticking loop right now
         clock_driver.stop_live_clock()
         return {"status": "success", "live_tick": "disabled"}, 200
+    
+@app.route("/api/rearrange-presets", methods=["POST"])
+def rearrange_presets():
+    data = request.get_json()
+    new_order_strings = data.get("order", []) # Expects list of strings matching data-id values, like ['2', '1', '3']
+    
+    if not os.path.exists("data.json") or os.path.getsize("data.json") == 0:
+        return {"status": "error", "message": "No data found to rearrange"}, 400
+
+    try:
+        with open("data.json", "r", encoding="utf-8") as file:
+            presets_list = json.load(file)
+            
+        # Re-sort the python dictionary elements based on the mapped front-end sequence array
+        rearranged_list = []
+        for str_idx in new_order_strings:
+            py_idx = int(str_idx) - 1 # Translate 1-indexed string loop IDs to 0-indexed integer points
+            if 0 <= py_idx < len(presets_list):
+                rearranged_list.append(presets_list[py_idx])
+                
+        # Handle safety fallback for unmatched items
+        if len(rearranged_list) == 0:
+            return {"status": "error", "message": "Reordering structural mismatch"}, 400
+
+        # Save the updated layout array list structure directly back to disk
+        with open("data.json", "w", encoding="utf-8") as file:
+            json.dump(rearranged_list, file, indent=4)
+
+        return {"status": "success", "message": "Preset sequencing saved locally"}, 200
+
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to rewrite sequence file: {str(e)}"}, 500
 
 if __name__ == '__main__':
     clock_driver.setup()

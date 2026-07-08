@@ -279,19 +279,38 @@
         .switch:active .slider {
             transform: scale(0.97);
         }
+
+       .preset-item {
+            cursor: grab;
+            /* Block default mobile actions like scrolling or selecting text while interacting with the list element */
+            touch-action: none; 
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .preset-item.dragging {
+            opacity: 0.4;
+            background: #3a3a3c;
+            border: 1px dashed #0a84ff;
+        }
+
+        /* Ensure actions don't trigger drag behaviors accidentally */
+        .preset-actions button {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 <div id="toast-container"></div>
     <div class="card">
-        <h2>Live Clock Control</h2>
-        <form action="/set-time" method="POST">
-            <div class="form-group">
-                <input type="time" id="clock_input" name="clock_input" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Update Clock Face</button>
-        </form>
+    <h2>Live Clock Control</h2>
+    
+    <div class="form-group">
+        <label for="clock_input">Select Target Time</label>
+        <input type="time" id="clock_input" name="clock_input" required>
     </div>
+    
+    <button type="button" class="btn btn-primary" onclick="handleLiveClockSubmit()">Update Clock Face</button>
+</div>
     
 <div class="control-box" style="background: #2c2c2e; padding: 20px; border-radius: 12px; margin: 15px 0; display: flex; justify-content: space-between; align-items: center; color: white;">
     <div>
@@ -306,31 +325,40 @@
 </div>
 
     <div class="card">
-        <h3>Saved Cue Presets</h3>
-        <ul class="preset-list" id="presetContainer">
-            
-        {% for preset in presets %}
-        <li class="preset-item" id="preset-{{ loop.index }}">
-            <div class="preset-info" onclick="triggerPreset('{{ preset.preset_time }}')">
-                <div class="preset-name">{{ preset.preset_name }}</div>
-                <div class="preset-time">{{ preset.preset_time }}</div>
-                {% if preset.preset_notes %}
-                <div class="preset-notes">{{ preset.preset_notes }}</div>
-                {% endif %}
-            </div>
-            <div class="preset-actions">
-                <button class="btn btn-edit" onclick="handleEditPreset('{{ loop.index }}')">Edit</button>
-                <button class="btn btn-danger" onclick="handleDeletePreset('{{ loop.index }}')">Delete</button>
-            </div>
-        </li>
-        {% else %}
-        <li class="preset-item" style="justify-content: center; color: #aeaeae; font-style: italic;">
-            No saved cue presets found.
-        </li>
-        {% endfor %}
+            <h3>Saved Cue Presets</h3>
+            <ul class="preset-list" id="presetContainer" ondragover="initSortableList(event)">
+                
+            {% for preset in presets %}
+            <li class="preset-item" 
+                id="preset-{{ loop.index }}" 
+                data-id="{{ loop.index }}" 
+                draggable="true" 
+                ondragstart="handleDragStart(this)" 
+                ondragend="handleDragEnd(this)"
+                ontouchstart="handleTouchStart(event, this)"
+                ontouchmove="handleTouchMove(event)"
+                ontouchend="handleTouchEnd(event, this)">
+                
+                <div class="preset-info" onclick="triggerPreset('{{ preset.preset_time }}')">
+                    <div class="preset-name">{{ preset.preset_name }}</div>
+                    <div class="preset-time">{{ preset.preset_time }}</div>
+                    {% if preset.preset_notes %}
+                    <div class="preset-notes">{{ preset.preset_notes }}</div>
+                    {% endif %}
+                </div>
+                <div class="preset-actions">
+                    <button class="btn btn-edit" onclick="handleEditPreset('{{ loop.index }}')">Edit</button>
+                    <button class="btn btn-danger" onclick="handleDeletePreset('{{ loop.index }}')">Delete</button>
+                </div>
+            </li>
+            {% else %}
+            <li class="preset-item" style="justify-content: center; color: #aeaeae; font-style: italic;" draggable="false">
+                No saved cue presets found.
+            </li>
+            {% endfor %}
 
-        </ul>
-    </div>
+            </ul>
+        </div>
 
     <div class="card">
         <h3>Create Time Preset</h3>
@@ -410,6 +438,10 @@
     </div>
         
     <script>
+        // Force the polyfill tool to activate immediately for mobile viewports
+        window.DragDropPolyfill = {
+            force: true
+        };
         // Live character counter logic
         document.getElementById('preset_notes').addEventListener('input', function() {
             document.getElementById('charCount').innerText = `${this.value.length} / 100`;
@@ -676,6 +708,148 @@ function toggleLiveTick(isEnabled) {
         document.getElementById('liveTickToggle').checked = !isEnabled;
         alert("Failed to communicate toggle change to the clock hardware.");
     });
+}
+
+function handleLiveClockSubmit() {
+    const timeInput = document.getElementById("clock_input");
+    const rawTimeValue = timeInput.value;
+    
+    // Safety check to ensure the user picked a value
+    if (!rawTimeValue) {
+        if (typeof showToast === "function") {
+            showToast("Please select a time first.", "error");
+        } else {
+            alert("Please select a time first.");
+        }
+        return;
+    }
+
+    console.log("Sending raw browser time value to backend API:", rawTimeValue);
+
+    // Perform an asynchronous POST request to match your app.py API route
+    fetch('/api/set_time', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ time: rawTimeValue })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response error encountered while transmitting time parameters.');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log("Backend response received:", data);
+        if (typeof showToast === "function") {
+            showToast("Clock hands moving to position!", "success");
+        }
+    })
+    .catch(error => {
+        console.error("Transmission error:", error);
+        if (typeof showToast === "function") {
+            showToast("Failed to communicate with clock hardware.", "error");
+        }
+    });
+}
+
+let draggingElement = null;
+let touchStartY = 0;
+let hasDragged = false;
+
+// --- DESKTOP MOUSE HANDLERS ---
+function handleDragStart(element) {
+    draggingElement = element;
+    setTimeout(() => element.classList.add("dragging"), 0);
+}
+
+function handleDragEnd(element) {
+    element.classList.remove("dragging");
+    draggingElement = null;
+    saveNewOrder();
+}
+
+function initSortableList(e) {
+    e.preventDefault();
+    const container = document.getElementById("presetContainer");
+    const siblings = [...container.querySelectorAll(".preset-item:not(.dragging)")];
+    
+    let nextSibling = siblings.find(sibling => {
+        return e.clientY <= sibling.getBoundingClientRect().top + sibling.getBoundingClientRect().height / 2;
+    });
+    
+    container.insertBefore(draggingElement, nextSibling);
+}
+
+// --- MOBILE TOUCH HANDLERS ---
+function handleTouchStart(e, element) {
+    draggingElement = element;
+    
+    // Capture the initial vertical anchor point of the touch interaction
+    touchStartY = e.touches[0].clientY;
+    hasDragged = false; 
+    
+    element.classList.add("dragging");
+}
+
+function handleTouchMove(e) {
+    if (!draggingElement) return;
+
+    const touch = e.touches[0];
+    const currentY = touch.clientY;
+    
+    // Check if the movement breaks outside a tiny 5-pixel threshold box 
+    // This stops micro-jitters from accidentally being flagged as a drag operation
+    if (Math.abs(currentY - touchStartY) > 5) {
+        hasDragged = true;
+    }
+
+    if (e.cancelable) e.preventDefault(); 
+    
+    const container = document.getElementById("presetContainer");
+    const siblings = [...container.querySelectorAll(".preset-item:not(.dragging)")];
+    
+    let nextSibling = siblings.find(sibling => {
+        const box = sibling.getBoundingClientRect();
+        return currentY <= box.top + box.height / 2;
+    });
+    
+    container.insertBefore(draggingElement, nextSibling);
+}
+
+function handleTouchEnd(e, element) {
+    element.classList.remove("dragging");
+    draggingElement = null;
+    
+    // CRITICAL CONDITIONAL CHECK: Only hit the backend API if a true movement occurred!
+    if (hasDragged) {
+        saveNewOrder();
+    } else {
+        console.log("[Touch Interaction] Standard selection tap detected. Skipping sequence committal.");
+    }
+}
+
+// --- UNIVERSAL BACKEND COMMITTAL ---
+function saveNewOrder() {
+    const container = document.getElementById("presetContainer");
+    const items = [...container.querySelectorAll(".preset-item")];
+    const newOrderIndices = items.map(item => item.getAttribute("data-id")).filter(id => id !== null);
+
+    console.log("Syncing list hierarchy coordinates to disk:", newOrderIndices);
+
+    fetch('/api/rearrange-presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: newOrderIndices })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "success" && typeof showToast === "function") {
+            showToast("Presets rearranged successfully!", "success");
+        }
+    })
+    .catch(err => console.error("Error running reorder tracking:", err));
 }
     </script>
 </body>
