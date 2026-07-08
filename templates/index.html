@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <style>
+<style>
         /* Toast Notification Container */
         #toast-container {
             position: fixed;
@@ -54,6 +54,7 @@
         .toast-error {
             border-left: 6px solid #ff453a; /* Apple Red */
         }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #1c1c1e; 
@@ -239,23 +240,45 @@
             display: flex;
             gap: 6px;
         }
+
+        /* --- Vivid Tactile Toggle Switch Styles --- */
+        .switch .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ff453a; /* OFF State: iOS Dynamic Red */
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            border-radius: 34px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .switch .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: #ffffff;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+
+        /* ON State Override: iOS Dynamic Green */
         .switch input:checked + .slider {
-        background-color: #4a7c59; /* Custom moss green accent */
-    }
-    .slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-    }
-    .switch input:checked + .slider:before {
-        transform: translateX(20px);
-    }
+            background-color: #30d158;
+        }
+
+        /* Knob Shift Forward */
+        .switch input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Tiny press feedback logic */
+        .switch:active .slider {
+            transform: scale(0.97);
+        }
     </style>
 </head>
 <body>
@@ -269,6 +292,18 @@
             <button type="submit" class="btn btn-primary">Update Clock Face</button>
         </form>
     </div>
+    
+<div class="control-box" style="background: #2c2c2e; padding: 20px; border-radius: 12px; margin: 15px 0; display: flex; justify-content: space-between; align-items: center; color: white;">
+    <div>
+        <h3 style="margin: 0 0 5px 0; font-size: 18px;">Real-Time Ticking</h3>
+        <p style="margin: 0; font-size: 13px; color: #aeaeb2;">Disable to freeze hands instantly after changing times or presets.</p>
+    </div>
+    
+    <label class="switch" style="position: relative; display: inline-block; width: 60px; height: 34px; flex-shrink: 0;">
+        <input type="checkbox" id="liveTickToggle" checked onchange="toggleLiveTick(this.checked)" style="opacity: 0; width: 0; height: 0;">
+        <span class="slider"></span>
+    </label>
+</div>
 
     <div class="card">
         <h3>Saved Cue Presets</h3>
@@ -613,6 +648,33 @@
         // We treat a dropped connection here as a likely successful reboot sequence!
         status.style.color = "green";
         status.innerText = "Clock is rebooting now. Reconnect in 30 seconds!";
+    });
+}
+
+function toggleLiveTick(isEnabled) {
+    console.log("Sending Live Tick Configuration:", isEnabled);
+    
+    fetch('/api/toggle_live_tick', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: isEnabled })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response failure encountered during toggling.');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log("System state updated successfully:", data.message || data.status);
+    })
+    .catch(error => {
+        console.error("Error dispatching toggle request:", error);
+        // Revert UI component state locally if network error forces process dropping
+        document.getElementById('liveTickToggle').checked = !isEnabled;
+        alert("Failed to communicate toggle change to the clock hardware.");
     });
 }
     </script>

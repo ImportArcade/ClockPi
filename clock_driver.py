@@ -38,6 +38,8 @@ stop_ticker = False
 minute_residual = 0.0
 hour_residual = 0.0
 
+live_tick_enabled = True
+
 def setup():
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
@@ -125,7 +127,7 @@ def move_to_time(target_hr, target_min, is_shutdown = False):
     hour_residual = 0.0
     
     write_last_recorded_time()
-    if not is_shutdown:
+    if not is_shutdown and live_tick_enabled:
         start_live_clock()
 
 def tick_one_minute():

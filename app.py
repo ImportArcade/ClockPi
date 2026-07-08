@@ -297,6 +297,27 @@ def system_update():
             "status": "error",
             "message": str(e)
         }
+    
+@app.route('/api/toggle_live_tick', methods=['POST'])
+def api_toggle_live_tick():
+    data = request.get_json()
+    # Expects a payload like: {"enabled": true} or {"enabled": false}
+    is_enabled = bool(data.get('enabled', True))
+    
+    # Update the driver state
+    clock_driver.live_tick_enabled = is_enabled
+    
+    if is_enabled:
+        print("[System Control] Live ticking globally enabled.")
+        # If the clock is currently sitting still, wake it up immediately
+        if not clock_driver.background_thread or not clock_driver.background_thread.is_alive():
+            clock_driver.start_live_clock()
+        return {"status": "success", "live_tick": "enabled"}, 200
+    else:
+        print("[System Control] Live ticking globally disabled.")
+        # Hard stop the ticking loop right now
+        clock_driver.stop_live_clock()
+        return {"status": "success", "live_tick": "disabled"}, 200
 
 if __name__ == '__main__':
     clock_driver.setup()
