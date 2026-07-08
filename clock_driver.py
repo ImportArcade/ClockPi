@@ -28,8 +28,8 @@ STEPS_PER_MIN = (STEPS_PER_REV * MINUTE_GEAR_RATIO) / 60
 STEPS_PER_HR  = (STEPS_PER_REV * HOUR_GEAR_RATIO) / 12
 
 # Global tracking variables
-current_minute_step = 0
-current_hour_step = 0
+current_minute_step = 0.0
+current_hour_step = 0.0
 minute_step_index = 0
 hour_step_index = 0
 background_thread = None
@@ -130,32 +130,28 @@ def move_to_time(target_hr, target_min, is_shutdown = False):
 
 def tick_one_minute():
     global current_minute_step, current_hour_step
-    global minute_residual, hour_residual
 
-    # 1. Calculate raw target step counts including any leftover fractions
-    raw_minute_steps = (STEPS_PER_REV / 60) + minute_residual  # 34.1333 + leftover
-    raw_hour_steps   = (STEPS_PER_REV / 720) + hour_residual   # 2.8444 + leftover
+    # 1. Calculate the theoretical exact absolute float position for the next minute
+    TOTAL_MIN_REV_STEPS = 60 * STEPS_PER_MIN
+    TOTAL_HR_REV_STEPS  = 12 * STEPS_PER_HR
 
-    # 2. Separate the clean whole integers that the motor can actually execute
-    one_minute_step = int(raw_minute_steps)
-    hour_step       = int(raw_hour_steps)
+    next_minute_target = (current_minute_step + (STEPS_PER_REV / 60)) % TOTAL_MIN_REV_STEPS
+    next_hour_target   = (current_hour_step + (STEPS_PER_REV / 720)) % TOTAL_HR_REV_STEPS
 
-    # 3. Save the tiny decimal remainders back to the globals for the next minute
-    minute_residual = raw_minute_steps - one_minute_step
-    hour_residual   = raw_hour_steps - hour_step
+    # 2. The physical steps to take is the difference between where we are 
+    # and where we need to be, cast to an integer at the last second
+    one_minute_step = int(next_minute_target - current_minute_step)
+    hour_step       = int(next_hour_target - current_hour_step)
 
-    # 4. Physically drive the stepper motors using your sequential motor driver
+    # 3. Fire the hardware motors
     if one_minute_step > 0:
         step_motor(MINUTE_PINS, one_minute_step, False)
     if hour_step > 0:
         step_motor(HOUR_PINS, hour_step, True)
 
-    # 5. Keep your master tracking metrics clean and constrained as pure integers
-    TOTAL_MIN_REV_STEPS = int(60 * STEPS_PER_MIN)
-    TOTAL_HR_REV_STEPS  = int(12 * STEPS_PER_HR)
-
-    current_minute_step = (current_minute_step + one_minute_step) % TOTAL_MIN_REV_STEPS
-    current_hour_step   = (current_hour_step + hour_step) % TOTAL_HR_REV_STEPS
+    # 4. Save the exact float tracking parameters globally
+    current_minute_step = next_minute_target
+    current_hour_step   = next_hour_target
 
     display_tracked_time()
     
