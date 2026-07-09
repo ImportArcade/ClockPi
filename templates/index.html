@@ -297,6 +297,15 @@
         .preset-actions button {
             cursor: pointer;
         }
+
+        /* Visual cue when an item is unlocked via a long press */
+        .preset-item.dragging {
+            opacity: 0.5;
+            background: #3a3a3c;
+            border: 1px dashed #0a84ff;
+            transform: scale(1.02);
+            transition: transform 0.15s ease;
+        }
     </style>
 </head>
 <body>
@@ -757,6 +766,8 @@ function handleLiveClockSubmit() {
 let draggingElement = null;
 let touchStartY = 0;
 let hasDragged = false;
+let pressTimer = null; // Holds the delay timer structure
+let isLongPressed = false; // Flags when rearrangement is unlocked
 
 // --- DESKTOP MOUSE HANDLERS ---
 function handleDragStart(element) {
@@ -784,13 +795,19 @@ function initSortableList(e) {
 
 // --- MOBILE TOUCH HANDLERS ---
 function handleTouchStart(e, element) {
-    draggingElement = element;
-    
-    // Capture the initial vertical anchor point of the touch interaction
+    // Capture initial touch points
     touchStartY = e.touches[0].clientY;
-    hasDragged = false; 
-    
-    element.classList.add("dragging");
+    hasDragged = false;
+    isLongPressed = false;
+    draggingElement = element;
+
+    // Start a 400ms countdown buffer before allowing a rearrangement
+    pressTimer = setTimeout(() => {
+        isLongPressed = true;
+        element.classList.add("dragging");
+        // Optional: Trigger a tiny vibration on supported devices for haptic feedback
+        if (navigator.vibrate) navigator.vibrate(50); 
+    }, 400); 
 }
 
 function handleTouchMove(e) {
@@ -798,15 +815,21 @@ function handleTouchMove(e) {
 
     const touch = e.touches[0];
     const currentY = touch.clientY;
-    
-    // Check if the movement breaks outside a tiny 5-pixel threshold box 
-    // This stops micro-jitters from accidentally being flagged as a drag operation
-    if (Math.abs(currentY - touchStartY) > 5) {
-        hasDragged = true;
+    const yDiff = Math.abs(currentY - touchStartY);
+
+    // If the user shifts their finger significantly BEFORE the long press registers, 
+    // cancel the timer and let them scroll normally.
+    if (!isLongPressed) {
+        if (yDiff > 10) {
+            clearTimeout(pressTimer);
+        }
+        return; 
     }
 
+    // If we reach this point, they HAVE successfully long-pressed and are arranging!
     if (e.cancelable) e.preventDefault(); 
-    
+    hasDragged = true;
+
     const container = document.getElementById("presetContainer");
     const siblings = [...container.querySelectorAll(".preset-item:not(.dragging)")];
     
@@ -819,15 +842,21 @@ function handleTouchMove(e) {
 }
 
 function handleTouchEnd(e, element) {
+    // Clear the timer in case they let go before 400ms passed
+    clearTimeout(pressTimer);
+    
     element.classList.remove("dragging");
     draggingElement = null;
     
-    // CRITICAL CONDITIONAL CHECK: Only hit the backend API if a true movement occurred!
-    if (hasDragged) {
+    // Only hit the backend if they unlocked long-press AND physically moved the item
+    if (isLongPressed && hasDragged) {
         saveNewOrder();
     } else {
-        console.log("[Touch Interaction] Standard selection tap detected. Skipping sequence committal.");
+        console.log("[Touch Interaction] Standard selection tap or canceled scroll. Skipping backend update.");
     }
+    
+    isLongPressed = false;
+    hasDragged = false;
 }
 
 // --- UNIVERSAL BACKEND COMMITTAL ---
