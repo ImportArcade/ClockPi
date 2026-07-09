@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
-import clock_driver
-import startup_shutdown as startshut
+#import clock_driver
+#import startup_shutdown as startshut
 import json
 import os
 import subprocess
@@ -38,21 +38,24 @@ def redirect_to_setup():
 
 @app.route("/")
 def index():
-    #Get presets from data.json file
     presets = []
     if os.path.exists("data.json"):
         try:
             with open("data.json", "r", encoding="utf-8") as file:
                 data = json.load(file)
-
                 if isinstance(data, dict):
                     presets = [data]
                 elif isinstance(data, list):
                     presets = data
         except json.JSONDecodeError:
-            print("Warning: data.json was empty or corrupted.")
             presets = [] 
-    return render_template('index.html', presets=presets)
+            
+    # Force the browser to bypass local storage and request clean data every single time
+    response = app.make_response(render_template('index.html', presets=presets))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.route("/api/set_time", methods=["POST"])
 def set_time():
@@ -78,7 +81,7 @@ def set_time():
 
         print(f"[Analog Conversion] Browser time '{browser_hour:02d}:{target_minute:02d}' translated to physical hands -> {target_hour}:{target_minute:02d}")
         
-        clock_driver.move_to_time(target_hour, target_minute)
+        # clock_driver.move_to_time(target_hour, target_minute)
 
         return {"status": "success", "message": f"Clock updating to {target_hour}:{target_minute:02d}"}, 200
         
@@ -178,14 +181,14 @@ def api_nudge():
     direction = data.get('direction')
     
     # 1. Stop background time tracking loop so it doesn't interrupt manual adjustment
-    clock_driver.stop_live_clock()
+    #clock_driver.stop_live_clock()
     
     # 2. Determine target motor lines
     if motor == 'minute':
-        pins = clock_driver.MINUTE_PINS
+        #pins = clock_driver.MINUTE_PINS
         is_hour = False
     else:
-        pins = clock_driver.HOUR_PINS
+        #pins = clock_driver.HOUR_PINS
         is_hour = True
 
     # 3. Handle step count direction parameters
@@ -194,7 +197,7 @@ def api_nudge():
         steps = -NUDGE_STEPS
 
     print(f"[Manual Control] Nudging {motor} motor {direction} by {abs(steps)} steps.")
-    clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
+    #clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
     
     return {"status": "success", "motor": motor, "direction": direction}
 
@@ -206,14 +209,14 @@ def api_nudge_precise():
     steps = int(data.get('steps', NUDGE_STEPS_PRECISE))  # Default to precise step count if not provided
 
     # 1. Stop background time tracking loop so it doesn't interrupt manual adjustment
-    clock_driver.stop_live_clock()
+    #clock_driver.stop_live_clock()
 
     # 2. Determine target motor lines
     if motor == 'minute':
-        pins = clock_driver.MINUTE_PINS
+        #pins = clock_driver.MINUTE_PINS
         is_hour = False
     else:
-        pins = clock_driver.HOUR_PINS
+        #pins = clock_driver.HOUR_PINS
         is_hour = True
 
     # 3. Handle step count direction parameters
@@ -221,19 +224,19 @@ def api_nudge_precise():
         steps = -steps
 
     print(f"[Manual Control] Nudging {motor} motor {direction} by {abs(steps)} steps.")
-    clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
+    #clock_driver.step_motor(pins, steps, is_hour_motor=is_hour)
 
     return {"status": "success", "motor": motor, "direction": direction, "steps": steps}
 
 @app.route('/api/set_zero', methods=['POST'])
 def api_set_zero():
     # Force reset tracking points to perfect zero coordinates
-    clock_driver.reset_tracking_to_zero()
+    #clock_driver.reset_tracking_to_zero()
     return {"status": "aligned"}
 
-@app.route('/api/shutdown', methods=['POST'])
-def shutdown():
-    startshut.smooth_shutdown()
+#@app.route('/api/shutdown', methods=['POST'])
+#def shutdown():
+    #startshut.smooth_shutdown()
 
 @app.route('/wifi-setup/', methods=['GET', 'POST'])
 def wifi_setup():
@@ -320,18 +323,18 @@ def api_toggle_live_tick():
     is_enabled = bool(data.get('enabled', True))
     
     # Update the driver state
-    clock_driver.live_tick_enabled = is_enabled
+    #clock_driver.live_tick_enabled = is_enabled
     
     if is_enabled:
         print("[System Control] Live ticking globally enabled.")
         # If the clock is currently sitting still, wake it up immediately
-        if not clock_driver.background_thread or not clock_driver.background_thread.is_alive():
-            clock_driver.start_live_clock()
+        #if not clock_driver.background_thread or not clock_driver.background_thread.is_alive():
+            #clock_driver.start_live_clock()
         return {"status": "success", "live_tick": "enabled"}, 200
     else:
         print("[System Control] Live ticking globally disabled.")
         # Hard stop the ticking loop right now
-        clock_driver.stop_live_clock()
+        #clock_driver.stop_live_clock()
         return {"status": "success", "live_tick": "disabled"}, 200
     
 @app.route("/api/rearrange-presets", methods=["POST"])
@@ -367,5 +370,5 @@ def rearrange_presets():
         return {"status": "error", "message": f"Failed to rewrite sequence file: {str(e)}"}, 500
 
 if __name__ == '__main__':
-    clock_driver.setup()
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=False)
+    #clock_driver.setup()
+    app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False, threaded=False)
