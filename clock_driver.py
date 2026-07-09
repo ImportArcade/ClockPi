@@ -70,7 +70,7 @@ def step_motor(pins, steps_to_move, is_hour_motor=False):
         else:
             current_index = (current_index + 3) % 4
             
-        time.sleep(0.005)
+        time.sleep(0.004)
     
     if is_hour_motor:
         hour_step_index = current_index
