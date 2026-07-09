@@ -874,8 +874,14 @@ function saveNewOrder() {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.status === "success" && typeof showToast === "function") {
-            showToast("Presets rearranged successfully!", "success");
+        if (data.status === "success") {
+            if (typeof showToast === "function") {
+                showToast("Presets rearranged successfully!", "success");
+            }
+            // Force a clean reload so Jinja re-stamps data-id components in their fresh sequence positions
+            setTimeout(() => {
+                window.location.reload();
+            }, 300); 
         }
     })
     .catch(err => console.error("Error running reorder tracking:", err));
